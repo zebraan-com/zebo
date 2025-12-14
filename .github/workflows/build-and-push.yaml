@@ -1,0 +1,45 @@
+name: build-and-push
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      # Auth using a JSON key stored in GitHub Secrets.
+      # Prefer Workload Identity Federation in production to avoid long-lived keys.
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+          
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-south1-docker.pkg.dev -q
+
+      - name: Build and Push
+        run: |
+          IMAGE=asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zebo-registry/zebo-app
+          TAG=sha-${GITHUB_SHA::7}
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          docker build -t $IMAGE:$TAG -f zebo/Dockerfile zebo
+          docker push $IMAGE:$TAG
+      # trigger a workflow in zebo-infra to run terraform apply with new image tag
+      - name: Trigger zebo-infra update-image-tag
+        env:
+          INFRA_REPO: zebraan-com/zebo-infra
+          TAG: ${{ steps.build.outputs.tag }}
+        run: |
+          curl -s -X POST https://api.github.com/repos/$INFRA_REPO/dispatches \
+            -H "Authorization: token ${{ secrets.INFRA_REPO_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"event_type\": \"update-image-tag\", \"client_payload\": {\"tag\": \"${TAG}\"}}"
