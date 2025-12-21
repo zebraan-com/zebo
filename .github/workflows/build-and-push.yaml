@@ -30,6 +30,7 @@ jobs:
         run: gcloud auth configure-docker asia-south1-docker.pkg.dev -q
 
       - name: Build and Push
+        id: build
         run: |
           IMAGE=asia-south1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zebo-registry/zebo-app
           TAG=sha-${GITHUB_SHA::7}
