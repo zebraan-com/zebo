@@ -88,3 +88,13 @@ async def run_crewai_task(req: RunRequest):
 def root():
     return {"message": "CrewAI API is up and running!"}
 
+@app.get("/health")
+def health():
+    """Liveness probe endpoint - checks if the application is alive"""
+    return {"status": "healthy"}
+
+@app.get("/ready")
+def ready():
+    """Readiness probe endpoint - checks if the application is ready to serve traffic"""
+    return {"status": "ready"}
+
